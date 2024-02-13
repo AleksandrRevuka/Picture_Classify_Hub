@@ -1,0 +1,11 @@
+name: pic_class_hub_env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - tensorflow
+  - django
+  - psycopg2-binary
+  - pillow
+  - python-dotenv

@@ -1,5 +1,6 @@
 from django.apps import AppConfig
 from keras.models import load_model
+import os
 
 class AppImageConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
@@ -10,4 +11,5 @@ class AppImageConfig(AppConfig):
         self.model = None
 
     def ready(self):
-        self.model = load_model('app_image/ml_models/model_cifar10_90_vgg16.h5')
+        model_path = os.path.join('app_image', 'ml_models', 'model_cifar10_90_vgg16.h5')
+        self.model = load_model(model_path)
