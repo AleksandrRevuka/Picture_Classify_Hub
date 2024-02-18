@@ -2,6 +2,7 @@ import PIL
 from PIL import Image
 import os
 import uuid
+import io
 
 from django.http import HttpResponseServerError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -41,7 +42,7 @@ def save_picture_to_claud(img_32x32: PIL.Image.Image):
 
     # завантажуємо оброблену картинку в Cloudinary
     uploaded_result = cloudinary.uploader.upload(img_temp, public_id=random_filename)
-
+    
     try:
         cloudinary_url = uploaded_result['url']  # отримаємо URL картинки на Cloudinary
         cloudinary_public_id = uploaded_result['public_id']  # отримаємо Public ID картинки на Cloudinary
@@ -69,7 +70,7 @@ def preprocess_image(img):
 
 def svg_reshape_to_32x32x3(image: PillowImage):
     """Отримання масиву із зображення з необхідною розмірністю (32, 32, 3)"""
-
+    original_image = image
     img_32x32 = image.resize((32, 32))
     image_array = np.array(img_32x32)
 
@@ -81,11 +82,13 @@ def svg_reshape_to_32x32x3(image: PillowImage):
         image_array_with_third_channel = np.dstack((image_array, third_channel))  # додаємо його до image_array
         image_array = image_array_with_third_channel
         # створюємо об'єкт зображення Pillow із масиву image_array
+        image = PillowImage.fromarray(image_array.astype('uint8'), 'RGB')
         img_32x32 = PillowImage.fromarray(image_array.astype('uint8'), 'RGB')
     else:
         print(f'Розмірність масиву дорівнює {image_array.shape}, підходяча розмірність - (32, 32, 2) або (32, 32, 4)')
 
-    return image_array, img_32x32
+    return image_array, img_32x32, original_image
+
 
 
 def svg_classification(image_array, class_name_modelinference):
@@ -106,7 +109,7 @@ def svg_classification(image_array, class_name_modelinference):
 
 def save_jpeg_and_url_from_svg(form, img_32x32):
     """Збереження картинки в Coudinary та її URL в базі даних"""
-
+    
     # конвертуємо зображення в формат RGB для збереження без альфа-каналу (JPEG його не підтримує)
     img_32x32_rgb = img_32x32.convert('RGB')
 
@@ -120,8 +123,8 @@ def save_jpeg_and_url_from_svg(form, img_32x32):
     saved_image = PillowImage.open(temp_filename)
 
     # завантажуємо зображення в хмару та отримуємо його URL
-    cloudinary_url = save_picture_to_claud(saved_image)[0]
-
+    cloudinary_url, cloudinary_public_id = save_picture_to_claud(saved_image)
+    
     # видаляємо тимчасовий файл
     os.remove(temp_filename)
 
@@ -130,9 +133,12 @@ def save_jpeg_and_url_from_svg(form, img_32x32):
         image_instance = form.save(commit=False)
         image_instance.cloudinary_image = cloudinary_url
         image_instance.save()  # при цьому іде запис в БД і запис оригінального файлу на диск
+        return cloudinary_url, cloudinary_public_id
+    # except Exception as e:
+    #     return HttpResponseServerError(f"Помилка при збереженні в БД: {str(e)}")
     except Exception as e:
-        return HttpResponseServerError(f"Помилка при збереженні в БД: {str(e)}")
-
+        error_message = f"URL зображення не отримано, помилка: {str(e)}"
+        return (cloudinary_url, cloudinary_public_id)  # Return default values for URL and public ID
 
 def jpg_classification(img_32x32_array, class_name_modelinference):
     """Класифікація зображення з файлу формату .jpg та .jpeg"""
@@ -171,6 +177,5 @@ def remove_img_from_cloud(public_id: str) -> None:
 
 PUBLIC_ID = {"public_id": None} # зберігає public id попередньго фото
 
-    
 
     

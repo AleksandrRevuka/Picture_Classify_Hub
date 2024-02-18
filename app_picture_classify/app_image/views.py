@@ -17,9 +17,9 @@ from PIL import Image as PillowImage
 import io
 import numpy as np
 import matplotlib.pyplot as plt
+import cloudinary
 
 
-img_public_id = None
 
 def destroy_original_image_from_cloud(func):
     """
@@ -36,6 +36,7 @@ def destroy_original_image_from_cloud(func):
     return inner
 
 
+
 class ModelInference:
     def __init__(self, model):
         self.model = model
@@ -49,7 +50,6 @@ class ModelInference:
 
 
 
-
 @destroy_original_image_from_cloud
 def home(request):
     form = ImageForm(instance=ImageModel())
@@ -59,17 +59,16 @@ def home(request):
     if request.method == 'POST':
         form = ImageForm(request.POST, request.FILES, instance=ImageModel())
         if form.is_valid():
-            # global img_public_id
+
             uploaded_image = request.FILES['original_file_name']  # отримуємо завантажену картинку (тимчасовий файл)
-            img_url, img_public_id = save_picture_to_claud(PillowImage.open(uploaded_image))
-            PUBLIC_ID['public_id'] = img_public_id
+
             file_extension = os.path.splitext(uploaded_image.name)[1]  # отримуємо розширення тимчасового файла
 
             if file_extension == '.svg':
                 # ---------------------------------------Векторні зображення (чорно-білі та кольорові)
 
-                # Створюємо тимчасовий файл для збереження PNG-зображення
-                with WandImage(blob=uploaded_image.read(), format='svg', width=32, height=32,
+                # Створюємо тимчасовий файл для збереження PNG-зображення"
+                with WandImage(blob=uploaded_image.read(), format='svg',width=32, height=32,
                            background=Color('#00000000')) as img:
                     # Конвертуємо SVG у PNG
                     with img.convert('png') as converted_img:
@@ -78,17 +77,21 @@ def home(request):
 
                 # створюємо об'єкт зображення Pillow з байтового рядка
                 image = PillowImage.open(io.BytesIO(uploaded_image1))
-
+                
                 # отримуємо масив із зображення з необхідною розмірністю (32, 32, 3)
-                image_array, img_32x32 = svg_reshape_to_32x32x3(image)
-
+                image_array, img_32x32, original_image = svg_reshape_to_32x32x3(image)
+            
                 # Класифікація
                 predicted_class = svg_classification(image_array, ModelInference)
 
                 # збереження зображення в хмару, його url в базу даних
+                img_url, img_public_id = save_jpeg_and_url_from_svg(form, image)
                 save_jpeg_and_url_from_svg(form, img_32x32)
+                PUBLIC_ID['public_id'] = img_public_id
 
             else:
+                img_url, img_public_id = save_picture_to_claud(PillowImage.open(uploaded_image))
+                PUBLIC_ID['public_id'] = img_public_id
                 # ---------------------------------------Растрові зображення (чорно-білі та кольорові)
                 # отримуємо зображення розміром 32х32 пікселі з оригінального зображення та відповідного масиву
                 img_32x32, img_32x32_array = preprocess_image(uploaded_image)
@@ -98,6 +101,9 @@ def home(request):
 
                 # збереження зображення в хмару, його url в базу даних
                 save_jpeg_and_url_from_jpg_and_jpeg(form, img_32x32)
+
+            # видаляємо тимчасовий файл
+            os.remove(uploaded_image.name)
 
     return render(request,
                   template_name='app_image/index.html',
